@@ -7,19 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Grab all books from the database and return them
-func getBooksAPI(c *gin.Context) {
-	var books []Book
-
-	books, err := getBooksDB()
-
-	if err != nil {
-		//Return the error to the api if it cant connect
-		c.IndentedJSON(http.StatusInternalServerError, gin.H{"Error": err.Error()})
-	}
-	c.IndentedJSON(http.StatusOK, books)
-}
-
 func createBookAPI(c *gin.Context) {
 	var newBook BookInput
 
@@ -45,21 +32,64 @@ func searchBooksAPI(c *gin.Context) {
 	title := c.DefaultQuery("title", "")
 	author := c.DefaultQuery("author", "")
 
-	c.IndentedJSON(http.StatusOK, gin.H{"id": id, "title": title, "author": author})
+	books, err := searchBooks(id, title, author)
+
+	//Some error with fetching the books search
+	if err != nil {
+		c.IndentedJSON(http.StatusInternalServerError, gin.H{"books": "null", "error": err.Error()})
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, gin.H{"books": books, "error": "null"})
 }
 
 func checkoutBookAPI(c *gin.Context) {
-	c.IndentedJSON(http.StatusOK, gin.H{"Message": "Checkout Book"})
+	id := c.DefaultQuery("id", "")
+
+	if id == "" {
+		//No parameter for id is given, return a status indicating a bad request
+		c.IndentedJSON(http.StatusBadRequest, gin.H{"book": "null", "error": "No ID Supplied"})
+		return
+	}
+
+	book, err := checkoutDB(id) //Call the database
+
+	if err != nil {
+		//Return an error if the database throws an error
+		c.IndentedJSON(http.StatusBadRequest, gin.H{"book": "null", "error": err.Error()})
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, gin.H{"book": book, "error": "null"})
+}
+
+func returnBookAPI(c *gin.Context) {
+	id := c.DefaultQuery("id", "")
+
+	if id == "" {
+		//No parameter for id is given, return a status indicating a bad request
+		c.IndentedJSON(http.StatusBadRequest, gin.H{"book": "null", "error": "No ID Supplied"})
+		return
+	}
+
+	book, err := returnBookDB(id) //Call the database
+
+	if err != nil {
+		//Return an error if the database throws an error
+		c.IndentedJSON(http.StatusBadRequest, gin.H{"book": "null", "error": err.Error()})
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, gin.H{"book": book, "error": "null"})
 }
 
 func getRoutes(c *gin.Context) {
 	routes := gin.H{
-		"GET: /":            "Returns all available routes within the API",
-		"GET: /book":        "Returns all books in Database",
-		"POST: /createBook": "Adds a book with JSON of values (title, author and quantity) to the Database",
-		"GET: /searchBooks": "Returns books matching query ? (title, author or quantity) in the Database",
-		"PATCH: /checkout":  "Decreases the quantity by one with query ? (id) in the Database",
-		"PATCH: /checkin":   "Increases the quantity by one with query ? (id) in the Database",
+		"GET: /":               "Returns all available routes within the API",
+		"POST: /createBook":    "Adds a book with JSON of values (title, author and quantity) to the Database",
+		"GET: /searchBooks":    "Returns books matching query ? (title, author or quantity) in the Database",
+		"PATCH: /checkoutBook": "Decreases the quantity by one with query ? (id) in the Database",
+		"PATCH: /returnBook	":  "Increases the quantity by one with query ? (id) in the Database",
 	}
 
 	c.IndentedJSON(http.StatusOK, routes)
@@ -77,11 +107,12 @@ func main() {
 	router := gin.Default()
 
 	router.GET("/", getRoutes)
-	router.GET("/books", getBooksAPI)
+	router.GET("/help", getRoutes)
+
 	router.POST("/createBook", createBookAPI)
 	router.GET("/searchBooks", searchBooksAPI)
-	router.PATCH("/checkout", checkoutBookAPI)
-	router.PATCH("/returnBook", getRoutes)
+	router.PATCH("/checkoutBook", checkoutBookAPI)
+	router.PATCH("/returnBook", returnBookAPI)
 
 	router.Run("localhost:8000")
 
